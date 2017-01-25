@@ -6,7 +6,6 @@
 #define btnLEFT   3
 #define btnSELECT 4
 #define btnNONE   5
-#define temporizador 60000 //Tiempo para desactivar la bomba (en ms)
 
 int lcd_key     = 0;
 int adc_key_in  = 0;
@@ -17,6 +16,8 @@ int pinSalidas[] = {31,33,35,37,39,41,43,45,47,49,51};
 int pinesConectados[5][2];
 int pinExplosivo;
 long timeFinal;
+char* colorCable[] = {"ROJO ","AMARI","VERDE","NEGRO","GRIS "};
+int temporizador;
 
 int read_LCD_buttons();  // para leer los botones
 void inicializacionPines();
@@ -26,6 +27,9 @@ void activacionPines();
 boolean verificacionPines();
 boolean verificacionPinExplosivo();
 void configuracionTiempo();
+void seleccionTiempo();
+void nuevoJuego();
+void pantallaInicio();
 
 //===========================================================================================
 
@@ -34,18 +38,10 @@ void setup() {
   randomSeed(analogRead(A1));
   Serial.begin(9600);
   lcd.begin(16, 2);              // Inicializar el LCD
-  lcd.setCursor(0,0);
-  lcd.print("Calculando...   ");
-  delay(2000);
-  inicializacionPines();
-  conexionadoPines();
-  eleccionPinExplosivo();
-  verificacionPines();
-  activacionPines();
-  lcd.setCursor(0,0);
-  lcd.print("LISTO!          ");
-  delay(1000);
-  configuracionTiempo();
+  pantallaInicio();
+  lcd.setCursor(0,1);
+  lcd.print("Calculando ruta");
+  nuevoJuego();
 }
 
 void loop() {
@@ -54,6 +50,9 @@ void loop() {
      lcd.print("Tic... Tac...   ");
      lcd.setCursor(0,1);
      lcd.print((timeFinal-millis())/1000);
+     if ( timeFinal-millis() <= 10000){
+       lcd.print(" ");
+     }
      
     //lcd_key = read_LCD_buttons();
 
@@ -63,20 +62,12 @@ void loop() {
      lcd.setCursor(0,0);
      lcd.print("¡Correcto!      ");
      delay(2500);
-     inicializacionPines();
-     conexionadoPines();
-     eleccionPinExplosivo();
-     activacionPines();
-     configuracionTiempo();
+     nuevoJuego();
   } else if (!verificacionPines() || millis() > timeFinal){
      lcd.setCursor(0,0);
-     lcd.print("¡ERROR! ¡PUM!   ");
+     lcd.print("ERROR! PUM!     ");
      delay(2500);
-     inicializacionPines();
-     conexionadoPines();
-     eleccionPinExplosivo();
-     activacionPines();
-     configuracionTiempo();  
+     nuevoJuego();
   }
 }
 
@@ -180,9 +171,10 @@ int read_LCD_buttons()
     boolean configurado = false;
     while(!configurado){
     lcd.setCursor(0,0);
-    lcd.print("Conecte ");
+    lcd.print(colorCable[i]);
+    lcd.print(" - ");
     lcd.print(pinesConectados[i][0]);
-    lcd.print(" y ");
+    lcd.print(" a ");
     lcd.print(pinesConectados[i][1]);
     lcd.setCursor(0,1);
     lcd.print("Pulse SELECT");
@@ -222,11 +214,11 @@ int read_LCD_buttons()
     }
   if(configurado == false){
     lcd.setCursor(0,0);
-    lcd.print("¡ERROR! Revise. ");
+    lcd.print("ERROR! Revise.  ");
     conexionadoPines();
   } else {
     lcd.setCursor(0,0);
-    lcd.print("¡Todo OK!       ");
+    lcd.print("Todo OK!        ");
     delay(500);  
   }
 }
@@ -234,11 +226,58 @@ int read_LCD_buttons()
 //=============================================================================
 
 void eleccionPinExplosivo(){
-  pinExplosivo = (int) random(5);
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Cable explosivo?");
+  pinExplosivo = 0;
+  lcd.setCursor(0,1);
+  lcd.print(colorCable[pinExplosivo]);
+  delay(100);
+  int botonPulsado = read_LCD_buttons();
+  while(botonPulsado != btnSELECT){
+      botonPulsado = read_LCD_buttons();
+      if (botonPulsado == btnDOWN){
+          pinExplosivo--;
+          if (pinExplosivo < 0){
+            pinExplosivo = 5;
+          }
+          if (pinExplosivo == 5) {
+            lcd.setCursor(0,1);
+            lcd.print("ALEATORIO");
+          } else {
+            lcd.setCursor(0,1);
+            lcd.print(colorCable[pinExplosivo]);
+            lcd.print("     ");
+          }
+          delay(250);
+      }
+      else if (botonPulsado == btnUP){
+          pinExplosivo++;
+          if (pinExplosivo > 5){
+            pinExplosivo = 0;
+          }
+          if (pinExplosivo == 5) {
+            lcd.setCursor(0,1);
+            lcd.print("ALEATORIO");
+          } else {
+            lcd.setCursor(0,1);
+            lcd.print(colorCable[pinExplosivo]);
+            lcd.print("     ");
+          }
+          delay(200);
+      }
+   }
+
+  if(pinExplosivo == 5) {
+    pinExplosivo = (int) random(5);
+  }
+  lcd.setCursor(0,0);
+  lcd.print("Cable elegido:  ");
   Serial.print("Pin explosivo: ");
   Serial.print(pinesConectados[pinExplosivo][0]);
   Serial.print("-");
   Serial.println(pinesConectados[pinExplosivo][1]);
+  delay(2500);
 }
 
 //=============================================================================
@@ -252,9 +291,15 @@ void activacionPines(){
 boolean verificacionPines(){
   boolean todoCorrecto = true;
   for (int i=0; i<5; i++) {
-    if(digitalRead(pinesConectados[i][0]) == LOW){
-      todoCorrecto = false;
-    }  
+    digitalWrite(pinesConectados[i][1],HIGH);
+    if (digitalRead(pinesConectados[i][0]) != HIGH){
+       todoCorrecto = false;
+    }
+    digitalWrite(pinesConectados[i][1],LOW);
+    if (digitalRead(pinesConectados[i][0]) != LOW){
+       todoCorrecto = false;
+    }
+    digitalWrite(pinesConectados[i][1],HIGH);  
   }
   if(todoCorrecto == false){
     Serial.println("Algun pin suelto!");
@@ -264,8 +309,13 @@ boolean verificacionPines(){
 boolean verificacionPinExplosivo(){
   boolean todoCorrecto = true;
   Serial.println("Paso por verificacion explosivo");
-  if(digitalRead(pinesConectados[pinExplosivo][0]) == LOW){
-    todoCorrecto = false;
+  digitalWrite(pinesConectados[pinExplosivo][1],LOW);
+  if (digitalRead(pinesConectados[pinExplosivo][0]) != LOW){
+     todoCorrecto = false;
+  }
+  digitalWrite(pinesConectados[pinExplosivo][1],HIGH);
+  if (digitalRead(pinesConectados[pinExplosivo][0]) != HIGH){
+     todoCorrecto = false;
   }
   if(todoCorrecto == false){
     Serial.println("Bomba desactivada!");
@@ -285,4 +335,69 @@ void configuracionTiempo(){
   Serial.println(timeFinal);
 }
 
+//=============================================================================
 
+void seleccionTiempo(){
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Selecc. tiempo ");
+  int tiempoSeleccionado = 60;
+  lcd.setCursor(0,1);
+  lcd.print(tiempoSeleccionado);
+  lcd.print("  segundos");
+  delay(100);
+  int botonPulsado = read_LCD_buttons();
+  while(botonPulsado != btnSELECT){
+      botonPulsado = read_LCD_buttons();
+      if (botonPulsado == btnDOWN){
+          tiempoSeleccionado = tiempoSeleccionado - 5;
+          if (tiempoSeleccionado < 10){
+            tiempoSeleccionado = 10;
+          }
+          lcd.setCursor(0,1);
+          lcd.print(tiempoSeleccionado);
+          lcd.print(" ");
+          delay(200);
+      }
+      else if (botonPulsado == btnUP){
+          tiempoSeleccionado = tiempoSeleccionado + 5;
+          if (tiempoSeleccionado > 120){
+            tiempoSeleccionado = 120;
+          }
+          lcd.setCursor(0,1);
+          lcd.print(tiempoSeleccionado);
+          delay(200);
+      }
+   }
+  lcd.setCursor(0,0);
+  lcd.print("Tiempo decidido:");
+  delay(2500);
+  temporizador = tiempoSeleccionado * 1000;
+}
+
+//========================================================================
+
+void nuevoJuego(){
+  inicializacionPines();
+  lcd.clear();
+  conexionadoPines();
+  verificacionPines();
+  activacionPines();
+  seleccionTiempo();
+  eleccionPinExplosivo();
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("LISTO!");
+  delay(2000);
+  configuracionTiempo();
+}
+
+//=======================================================================
+
+void pantallaInicio(){
+  lcd.setCursor(0,0);
+  lcd.print("BASPLO! El juego");
+  lcd.setCursor(0,1);
+  lcd.print("Por F.Belaza");
+  delay(1500);  
+}
